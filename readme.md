@@ -65,7 +65,7 @@ http://ftp.cvut.cz/kernel/people/geoff/cell/ps3-linux-docs/CellProgrammingTutori
 + K_o = **4.9**
 
 Выделенные значения позволяют увидеть ускорение, достигнутое двумя оптимизациями одновременно.
->K_sse+o = 42.6/6.15 = **6.9**
++ K_sse+o = 42.6/6.15 = **6.9**
 
 # Выводы
 
