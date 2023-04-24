@@ -4,22 +4,18 @@
 #include <SFML/Graphics/RectangleShape.hpp>
 // #include <SFML/Rect.hpp>
 
+#include "config.h"
+
 using namespace sf;
-
-#define BLUE
-
-#define COUNTS 1
-#define SSE
-// #define NO_VID
 
 const int N_cycles = 1;
 
-int FormMandelbrot(RenderWindow &window, Uint8 *pixels);
+inline int FormMandelbrot(RenderWindow &window, Uint8 *pixels);
 int Draw_Fractal(RenderWindow &window, Uint8 *pixels, Sprite &sprite, Texture &texture);
 
 int HandleKey(RenderWindow &window);
 int Check_Window(Window *window, Sprite *sprite);
-Color GetColor(int c);
+inline Color GetColor(int c);
 int GetFPS(Clock &clock, float lastTime);
 
 int Test(RenderWindow &window);

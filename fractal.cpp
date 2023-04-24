@@ -17,58 +17,59 @@ const int AVERAGE         = 10;
 
 int main()
 {
+    Uint8 pixels[4*Mandb_Initial.w_width*Mandb_Initial.w_height] = {};
     RenderWindow window(VideoMode(Mandb_Initial.w_width, Mandb_Initial.w_height), "Mandelbrot");
 
-    Uint8 pixels[4*Mandb_Initial.w_width*Mandb_Initial.w_height] = {};
-
-    Clock clock;
+#ifndef NO_VID
 
     Image image;
     image.create(Mandb_Initial.w_width, Mandb_Initial.w_height, pixels);
     Texture texture;
     Sprite sprite(texture);
+#endif
 
     float lastTime = 0;
     int number_of_iter = 0;
+    Clock clock;
+    clock.restart();
 
-// #ifndef NO_VID
-    while(window.isOpen())
+#ifdef NO_VID
+    for(;number_of_iter < AVERAGE*5; number_of_iter++)
     {
-
-        window.clear();
-        HandleKey(window);
-
         FormMandelbrot(window, pixels);
-        window.display();
-
-        // Draw_Fractal(window, pixels, sprite, texture);
-
-        number_of_iter++;
-        GetFPS(clock, lastTime);
-        if(number_of_iter == AVERAGE)
+#else
+    for(;window.isOpen() && number_of_iter < AVERAGE; number_of_iter++)
+    {
+        window.clear();
+        if(HandleKey(window))
         {
-            printf("FPS_AVERAGE = %g\n", fps_average/AVERAGE);
             number_of_iter = 0;
             fps_average = 0;
         }
+
+        FormMandelbrot(window, pixels);
+        window.display();
+#endif
+        GetFPS(clock, lastTime);
+
     }
+    printf("FPS_AVERAGE = %g\n", fps_average/(number_of_iter+1));
 
     return 0;
 }
 
 int GetFPS(Clock &clock, float lastTime)
 {
-    float currentTime = clock.restart().asSeconds();
-    float fps = 1.f / (currentTime - lastTime);
-    fps_average+=fps;
-    printf("FPS = %g\n", fps);
+    lastTime = clock.getElapsedTime().asSeconds();
 
-    lastTime = currentTime;
-    
+    float fps = 1.f / (lastTime);
+    fps_average+=fps;
+
+    clock.restart();
     return 0;
 }
 
-Color GetColor(int c)
+inline Color GetColor(int c)
 {
 #ifdef GREEN          
             Color col = Color(100, 100, 100, 255);
@@ -106,12 +107,10 @@ int HandleKey(RenderWindow &window)
             } else if(event.key.code == Keyboard::Equal)//+
             {
                 scale/=1.25;
-                // printf("new scale = %g\n", scale);
-            
+
             } else if(event.key.code == Keyboard::Dash)//-
             {
                 scale*=1.25;
-                // printf("new scale = %g\n", scale);
             
             } else if(event.key.code == Keyboard::Left)
             {
@@ -126,6 +125,9 @@ int HandleKey(RenderWindow &window)
             } else if(event.key.code == Keyboard::Down)
             {
                 Y_shift-=(int)(shift_val*scale);
+            }else
+            {
+                return 0;
             }
         }
 
@@ -133,14 +135,13 @@ int HandleKey(RenderWindow &window)
             window.close();
     }
 
-    return 0;
+    return 1;
 }
 
 #ifndef SSE
 
-int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
+inline int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
 {
-    // RectangleShape piece = RectangleShape(Vector2f(1/scale, 1/scale));
     RectangleShape piece = RectangleShape(Vector2f(1, 1));
 
     for(int cnt = 0; cnt < COUNTS; cnt++)
@@ -153,8 +154,6 @@ int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
             int xi = 0;
             for(; xi < Mandb_Initial.w_width; xi++)
             {
-                // pixels[xi*yi] = RectangleShape(Vector2f(1, 1));
-
                 float X0 = Mandb_Initial.x_min + (X_shift + xi)*Mandb_Initial.dx*scale;
 
                 float X  = X0;
@@ -162,8 +161,7 @@ int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
 
                 float R2 = X*X + Y*Y;
 
-                volatile int c = 0;
-                // while (c < Mandb_Initial.N_max && R2 < Mandb_Initial.R_max2)
+                int c = 0;
                 while (c < Mandb_Initial.N_max && R2 - Mandb_Initial.R_max2 < EPS)
                 {
                     float X2  = X*X;
@@ -177,6 +175,8 @@ int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
 
                     c++;
                 }
+
+                static volatile int color_val = c;
 
     #ifndef NO_VID
                 if(cnt == COUNTS - 1)
@@ -201,7 +201,7 @@ int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
 
 const int N_BITES = 4;
 
-int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
+inline int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
 {
     // RectangleShape piece = RectangleShape(Vector2f(1/scale, 1/scale));
     RectangleShape piece = RectangleShape(Vector2f(1, 1));
@@ -211,7 +211,6 @@ int FormMandelbrot(RenderWindow &window, Uint8 *pixels)
 
     for(int cnt = 0; cnt < COUNTS; cnt++)
     {
-
         int yi = 0;
         for (; yi < Mandb_Initial.w_height; yi++)
         {
