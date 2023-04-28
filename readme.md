@@ -210,27 +210,77 @@ https://webdesign.ru.net/article/pravila-oformleniya-fayla-readmemd-na-github.ht
 
 #### Простейший алгоритм
 
-Суть алгоритма такова: В области, где изображения не накладываются, цвет итогового изображения равен цвету фона. В остальной области цвет каждого пикселя задаётся по следующему правилу:
+Суть алгоритма такова: В области, где изображения не накладываются, цвет итогового изображения равен цвету фона. В остальной области цвет каждого пикселя задаём по следующему правилу:
 
 ~~~C++
-result_pixel.color = (front_pixel.alpha*front_pixel.color + (255 - front_pixel.alpha)*back_pixel.color)/255
+result_pixel.color = (front_pixel.alpha*front_pixel.color + (255 - front_pixel.alpha)*back_pixel.color)/255;
 ~~~
 
-В качестве фона я использовал изображение стола:
+В качестве фона мы использовали теннисный стол, а в качестве накладывемого изображения - котика:
 
 ![Table](img/Table.bmp)
-
-В качестве накладываемого изобажения я использовал этого котика:
-
 ![Cat](img/AskhatCat.bmp)
 
-Результат наложения получался следующим:
+Результат получался следующим:
 
 ![result](img/result_example.bmp)
 
 #### Оптимизированный алгоритм
 
+```
+   const __m128i _0 = _mm_set1_epi8(0);
+   const __m128i _255  = _mm_set1_epi16(255);
+
+    int step = N_BYTES-1;
+    if (front->width-delta_x<N_BYTES)
+    {
+        step = front->width-delta_x - 1;
+    }
+
+    size_t front_counter = (delta_y*front->width + delta_x);
+
+    __m128i front_pixel = _mm_loadu_si128((__m128i const *)(&front->pixels[front_counter]));
+    __m128i back_pixel  = _mm_loadu_si128((__m128i const *)(&back->pixels[back_counter]));
+
+    __m128i FRONT_PIXEL = (__m128i) _mm_movehl_ps((__m128) _0, (__m128) front_pixel);
+    __m128i BACK_PIXEL = (__m128i) _mm_movehl_ps((__m128) _0, (__m128) back_pixel);
+
+    front_pixel = _mm_cvtepu8_epi16 (front_pixel);
+    back_pixel = _mm_cvtepu8_epi16 (back_pixel);
+
+    FRONT_PIXEL = _mm_cvtepu8_epi16 (FRONT_PIXEL);
+    BACK_PIXEL = _mm_cvtepu8_epi16 (BACK_PIXEL);
+
+const   __m128i alpha_mask = _mm_setr_epi8(6, zero_val, 6, zero_val, 6, zero_val, 6, zero_val, 14, zero_val, 14, zero_val, 14, zero_val,
+    14, zero_val);
+
+    __m128i front_alpha = _mm_shuffle_epi8(front_pixel, alpha_mask);                  // front.a(0,1)
+    __m128i FRONT_ALPHA = _mm_shuffle_epi8(FRONT_PIXEL, alpha_mask);                  // front.a(2,3)
+
+    front_pixel = _mm_mullo_epi16(front_pixel, front_alpha);
+    FRONT_PIXEL = _mm_mullo_epi16(FRONT_PIXEL, FRONT_ALPHA);
+    back_pixel = _mm_mullo_epi16(back_pixel, _mm_sub_epi16 (_255, front_alpha));
+    BACK_PIXEL = _mm_mullo_epi16(BACK_PIXEL, _mm_sub_epi16 (_255, FRONT_ALPHA));
+
+    __m128i sum_low = _mm_add_epi16(front_pixel, back_pixel);
+    __m128i sum_high = _mm_add_epi16(FRONT_PIXEL, BACK_PIXEL);
+
+const   __m128i sum_mask = _mm_setr_epi8(1, 3, 5, 7, 9, 11, 13, 15, zero_val, zero_val, zero_val, zero_val, zero_val, 
+                                            zero_val, zero_val, zero_val);
+
+    sum_low = _mm_shuffle_epi8(sum_low, sum_mask);
+    sum_high = _mm_shuffle_epi8(sum_high, sum_mask);
+    volatile __m128i color = (__m128i)_mm_movelh_ps((__m128)sum_low, (__m128)sum_high); 
+
+    _mm_storeu_si128 ((__m128i*) &(result->pixels[back_counter]), color) ;
+```
+*Также ещё одним неочевидным ускорением алгоритма могло быть выравнивание размера накладываемого изображение под размер фона. Тогда можго было бы убрать ```if```, связанный с проверкой на наложение картинок.*
+
 #### Погрешности измерений
+
+Систематическая погрешность в этом эксперименте схожа с предыдущей из-за тех же приёмов измерения времени. Применяется ```sf::Clock```.
+
+Но вот замедление алгоритма из-за отрисовки тут отсутствует, т.к. процессы формируем изображения и записи его в файл происходят последовательности. И поэтому медленное сохранение в файл не увеличивает погрешность измерения основного алгоритма.
 
 #### Измерения
 
@@ -245,12 +295,16 @@ result_pixel.color = (front_pixel.alpha*front_pixel.color + (255 - front_pixel.a
 |  -O3   |     SSE     | **18300**  |  **8.32**   |
 | -Ofast |     SSE     | 13500 |  6.14  |
 
-В этой работе мне удалось значительно ускорить алгоритм с использованием SIMD-инструкций. 
-С помощью SSE удалось добиться ускорения в **2** раза, а вместе с флагами аж в **8,5** раз. 
+На основе данной таблицы можно сделать следующие выводы:
++ -Ofast не всегда является самым быстрым флагом оптимизации
++ Ускорение SSE без флагов сопоставимо с ускорением c флагами без SSE (2-3 раза)
++ Все значения FPS округлены до сотых, так что тут разумнее было бы измерять время напрямую, т.е. *iteration_time*
+
+Комбинируя две оптимизации нам удалось добиться ускорения в **8,5** раз!
 
 ## Результаты
 
-Основная задача проекта была выполнена. Мы научились снижать систематическую погрешность измерения времени работы алгоритма, а также оптимизировать его с помощью SIMD-инструкций. Эксперимент показал возможность ускорения в 7 раз.
+Основная задача проекта была выполнена. Мы научились снижать систематическую погрешность измерения времени работы алгоритма, и оптимизировать его с помощью SIMD-инструкций. Нашему процессору доступны интринсиксы типа ```AVX2``` и ```AVX-512```, не нашедшие отражения в данной работе, из-за чего не была достигнута максимально возможное быстродействие. Однако результат использования ```SSE4``` тоже велик: в 1-м и 2-м экспериментах удалось ускорить алгоритм в 7-8 раз. Отсюда следует, что параллелизм значительно повышает производительность. 
 
 ## Источники и литература
 
