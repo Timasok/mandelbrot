@@ -33,7 +33,7 @@
     
 3. Результатом вычислений является число `n` - количество итераций до выхода из цикла.
 
-4. Оно конвертируется в цвет, который приобретает точка с координатами (X0, Y0). Снизу приведён код функции ``Color getColor(int n)``. ``Color`` - объект графической библиотеки ``SFML``, формируемый числами , размером ``unsigned char``.
+4. Оно конвертируется в цвет, который приобретает точка с координатами (X0, Y0). Снизу приведён код функции ``Color getColor(int n)``. ``sf::Color`` - класс графической библиотеки ``SFML`` для работы с цветами закодированными в RGBA.
 
 ```C++
     Color col = Color(0, 0, 0, 0);
@@ -51,7 +51,7 @@ https://elementy.ru/posters/fractals/Mandelbrot
 Вот пример изображения, выдаваемого нашей программой:
 ![Mandelbrot](img/Mandelbrot_set.png)
 
-<!-
+<!--
 Объявление констант:
 
 ```C++
@@ -71,7 +71,7 @@ https://elementy.ru/posters/fractals/Mandelbrot
     float dx = (x_max - x_min)/w_width;
     float dy = (y_max - y_min)/w_height;
 ```
---->
+-->
 
 #### Алгоритм вычислений и его оптимизация
 
@@ -109,7 +109,7 @@ Cоздаём ``volatile`` переменную ``n_res``. После каждо
         __m128 n   = _mm_setzero_ps();
         __m128 cmp = _mm_set1_ps(1);
 
-        for(int i = 0; i < N_max; i++)                  // Проверка условий выхода из цикла - (2)
+        for(int i = 0; i < N_max; i++)                   // Проверка условий выхода из цикла - (2)
         {
             __m128 X2 = _mm_mul_ps(X, X);
             __m128 Y2 = _mm_mul_ps(Y, Y);
@@ -145,12 +145,12 @@ Cоздаём ``volatile`` переменную ``n_res``. После каждо
 
 ```C++
    int yi = 0;
-   for (; yi < w_height; yi++)                     // Обход по строчкам
+   for (; yi < w_height; yi++)                          // Обход по строчкам
     {
         float Y0 = y_min + (Y_shift+yi)*dy*scale;
 
         int xi = 0;
-        for(; xi < w_width; xi++)                   // Обход по столбцам
+        for(; xi < w_width; xi++)                       // Обход по столбцам
         {
             float X0 = x_min + (X_shift + xi)*dx*scale;
 
@@ -160,7 +160,7 @@ Cоздаём ``volatile`` переменную ``n_res``. После каждо
             float R2 = X*X + Y*Y;
 
             col = singleCalculation();
-            depictPixel(X0, Y0, col);               // отображение пикселя на экране
+            depictPixel(X0, Y0, col);                   // отображение пикселя на экране
         }
     }
 ```
@@ -172,7 +172,7 @@ Cоздаём ``volatile`` переменную ``n_res``. После каждо
     __m128 Mask   = _mm_set1_ps(0x0001);
 
     int yi = 0;
-    for (; yi < w_height; yi++)           // Обход по строчкам
+    for (; yi < w_height; yi++)                         // Обход по строчкам
     {
         __m128 Y_SHIFT = _mm_set1_ps(y_min + Y_shift*dy*scale);
         __m128 DY = _mm_set1_ps(dy*scale);
@@ -239,35 +239,58 @@ Cоздаём ``volatile`` переменную ``n_res``. После каждо
 
 ### Часть 2. Alpha Blending
 
-#### Написать, что надо наложитть одно изображение на другое
-
-+ добавить раздел данные
-
 #### Теоретическая справка
 
 Альфа-смешение - это процесс комбинирования одного изображения с фоном для создания видимости частичной или полной прозрачности.
 
+#### Данные
+
+Изображения фона и наклыдываемого изображения я выбрал следующие:
+
+Для фона - теннисный стол.
+
+![Table](img/Table.bmp)
+
+Для накладываемого изображения - котика.
+
+![Cat](img/AskhatCat.bmp)
+
+Также подоберём относительный сдвиг по X и Y такой, чтобы получилось такое взаимное расположение:
+
+![result](img/result_example.bmp)
+
 #### Простейший алгоритм
 
+TODO
 Суть алгоритма такова: цвет каждого пикселя задаём по следующему правилу:
-
+Мы обходим координаты фонового изображения и там, где на него накладывается изображение
 !!Написать как я пробегаюсь по изображению и сравниваб
+
+*Ещё одним неочевидным ускорением алгоритма является выравнивание размера накладываемого изображение под размер фона. Тогда можно было бы убрать ```if```, связанный с проверкой на наличие той или иной картинки в данной области.*
+
+```
+    int delta_x = xi - x_shift;
+    int delta_y = yi - y_shift;
+    size_t back_counter = yi*back->width + xi;
+    if ( (0 <= delta_x && delta_x < front->width) && (0 <= delta_y && delta_y < front->height))
+    {
+        result->->pixels[back_counter] = alpha_blend(front->pixels[front_counter], back->pixels[back_counter]);
+    } else
+    {
+        result->pixels[back_counter] = back->pixels[back_counter];
+    }
+```
+Ниже приведена формула, по которой вычисляется результирущий цвет пикселя.
 
 ~~~C++
 result_pixel.color = (front_pixel.alpha*front_pixel.color + (255 - front_pixel.alpha)*back_pixel.color)/255;
 ~~~
 
-В качестве фона мы использовали теннисный стол, а в качестве накладываемого изображения - котика:
-
-![Table](img/Table.bmp)
-![Cat](img/AskhatCat.bmp)
-
-Результат получался следующим:
-
-![result](img/result_example.bmp)
-
 #### Оптимизированный алгоритм
 
+В этом эксперименте, как и в предыдущем, мы применяли SIMD-инструкции. Для более подробного разбора векторного алгоритма можете обратиться к работе моего коллеги: https://github.com/VladZg/Alpha-Blending
+
+Тут приведу реализацию этого алгоритма на ``SSE`` интринсиках.
 ```
    const __m128i _0 = _mm_set1_epi8(0);
    const __m128i _255  = _mm_set1_epi16(255);
@@ -314,20 +337,6 @@ const   __m128i sum_mask = _mm_setr_epi8(1, 3, 5, 7, 9, 11, 13, 15, zero_val, ze
     volatile __m128i color = (__m128i)_mm_movelh_ps((__m128)sum_low, (__m128)sum_high); 
 
     _mm_storeu_si128 ((__m128i*) &(result->pixels[back_counter]), color) ;
-```
-*Ещё одним неочевидным ускорением алгоритма является выравнивание размера накладываемого изображение под размер фона. Тогда можно было бы убрать ```if```, связанный с проверкой на наличие той или иной картинки в данной области.*
-
-```
-    int delta_x = xi - x_shift;
-    int delta_y = yi - y_shift;
-    size_t back_counter = yi*back->width + xi;
-    if ( (0 <= delta_x && delta_x < front->width) && (0 <= delta_y && delta_y < front->height))
-    {
-        result->->pixels[back_counter] = alpha_blend(front->pixels[front_counter], back->pixels[back_counter]);
-    } else
-    {
-        result->pixels[back_counter] = back->pixels[back_counter];
-    }
 ```
 
 #### Погрешности измерений
